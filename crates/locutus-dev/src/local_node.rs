@@ -1,6 +1,5 @@
 use log::log;
 use std::{collections::HashMap, sync::Arc};
-use log::log;
 
 use locutus_node::{
     either::Either, ClientId, ClientRequest, HostResponse, PeerKey, RequestError, SqlitePool,
@@ -156,10 +155,6 @@ impl LocalNode {
                 Ok(res)
             }
             ClientRequest::Update { key, delta } => {
-                println!("updated key: {:?}", key.encode());
-                for (key, params) in self.contract_params.iter() {
-                    log::info!("saved contract key {}", key.encode())
-                }
                 let parameters = {
                     match self
                         .contract_params
