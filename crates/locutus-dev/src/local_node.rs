@@ -1,3 +1,4 @@
+use log::log;
 use std::{collections::HashMap, sync::Arc};
 use log::log;
 
@@ -126,7 +127,7 @@ impl LocalNode {
                     .map_err(Into::into)
                     .map_err(Either::Right)?;
                 let res = is_valid
-                    .then(|| HostResponse::PutResponse(*key))
+                    .then(|| HostResponse::PutResponse { key: *key })
                     .ok_or_else(|| {
                         Either::Left(RequestError::Put {
                             key: *key,
@@ -294,23 +295,10 @@ impl LocalNode {
             })
             .transpose()?;
         match self.contract_state.get(&key).await {
-            Ok(state) => {
-                let path = contract
-                    .then(|| {
-                        self.runtime.contracts.get_contract_path(&key).map_err(|_| {
-                            RequestError::Get {
-                                key,
-                                cause: "contract code hash key not specified".to_owned(),
-                            }
-                        })
-                    })
-                    .transpose()?;
-                Ok(HostResponse::GetResponse {
-                    contract: got_contract,
-                    state,
-                    path,
-                })
-            }
+            Ok(state) => Ok(HostResponse::GetResponse {
+                contract: got_contract,
+                state,
+            }),
             Err(StateStoreError::MissingContract) => Err(RequestError::Get {
                 key,
                 cause: "missing contract state".into(),
