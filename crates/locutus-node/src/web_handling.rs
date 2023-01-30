@@ -8,12 +8,12 @@ use locutus_runtime::{
 };
 
 use locutus_core::{
-    locutus_runtime::locutus_stdlib::api::{
+    locutus_runtime::locutus_stdlib::client_api::{
         ClientRequest, ContractRequest, ContractResponse, HostResponse,
     },
     *,
 };
-use locutus_stdlib::api::ErrorKind;
+use locutus_stdlib::client_api::ErrorKind;
 use tokio::{fs::File, io::AsyncReadExt, sync::mpsc};
 use warp::{
     reject::{self, Reject},
@@ -80,7 +80,7 @@ pub(crate) async fn contract_home(
                                     contract: &ContractContainer,
                                 ) -> InvalidParam {
                                     let key = contract.key();
-                                    log::error!("{err}");
+                                    tracing::error!("{err}");
                                     InvalidParam(format!("failed unpacking contract: {key}"))
                                 }
 
@@ -92,7 +92,7 @@ pub(crate) async fn contract_home(
                                 warp::hyper::Body::from(index)
                             }
                             other => {
-                                log::error!("{other}");
+                                tracing::error!("{other}");
                                 return Err(errors::HttpError(
                                     warp::http::StatusCode::INTERNAL_SERVER_ERROR,
                                 )
@@ -110,7 +110,7 @@ pub(crate) async fn contract_home(
         Some(HostCallbackResult::Result {
             result: Err(err), ..
         }) => {
-            log::error!("error getting contract `{key}`: {err}");
+            tracing::error!("error getting contract `{key}`: {err}");
             return Err(WrapErr(err.kind()).into());
         }
         None => {

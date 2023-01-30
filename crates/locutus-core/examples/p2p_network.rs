@@ -9,7 +9,7 @@ use libp2p::{
 use locutus_core::*;
 use locutus_runtime::prelude::{ContractContainer, WasmAPIVersion, WrappedContract, WrappedState};
 use locutus_stdlib::{
-    api::{ClientError, ClientRequest, ContractRequest, HostResponse},
+    client_api::{ClientError, ClientRequest, ContractRequest, HostResponse},
     prelude::{ContractCode, Parameters},
 };
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -172,7 +172,7 @@ impl ClientEventsProxy for UserEvents {
         _response: Result<HostResponse, ClientError>,
     ) -> BoxFuture<'_, Result<(), ClientError>> {
         Box::pin(async move {
-            log::info!("received response");
+            tracing::info!("received response");
             Ok(())
         })
     }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use blake2::digest::generic_array::GenericArray;
 use locutus_runtime::prelude::*;
-use locutus_stdlib::api::{
+use locutus_stdlib::client_api::{
     ClientError, ClientRequest, ComponentRequest, ContractRequest, ContractResponse, HostResponse,
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -12,7 +12,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     client_events::{ComponentError as CoreComponentError, ContractError as CoreContractError},
     either::Either,
-    ClientId, DynError, HostResult, RequestError, SqlitePool,
+    ClientId, DynError, HostResult, RequestError, Storage,
 };
 
 type Response = Result<HostResponse, Either<RequestError, DynError>>;
@@ -24,7 +24,7 @@ type Response = Result<HostResponse, Either<RequestError, DynError>>;
 /// of changes or can alternatively use the notification channel.
 pub struct Executor {
     runtime: Runtime,
-    contract_state: StateStore<SqlitePool>,
+    contract_state: StateStore<Storage>,
     update_notifications: HashMap<ContractKey, Vec<(ClientId, UnboundedSender<HostResult>)>>,
     subscriber_summaries: HashMap<ContractKey, HashMap<ClientId, StateSummary<'static>>>,
 }
@@ -32,7 +32,7 @@ pub struct Executor {
 impl Executor {
     pub async fn new(
         store: ContractStore,
-        contract_state: StateStore<SqlitePool>,
+        contract_state: StateStore<Storage>,
         ctrl_handler: impl FnOnce(),
     ) -> Result<Self, DynError> {
         ctrl_handler();
@@ -75,7 +75,9 @@ impl Executor {
             .insert(cli_id, summary)
             .is_some()
         {
-            log::warn!("contract {key} already was registered for peer {cli_id}; replaced summary");
+            tracing::warn!(
+                "contract {key} already was registered for peer {cli_id}; replaced summary"
+            );
         }
         Ok(())
     }
@@ -101,8 +103,8 @@ impl Executor {
             .await
         {
             match err {
-                Either::Left(err) => log::error!("req error: {err}"),
-                Either::Right(err) => log::error!("other error: {err}"),
+                Either::Left(err) => tracing::error!("req error: {err}"),
+                Either::Right(err) => tracing::error!("other error: {err}"),
             }
         }
     }
@@ -118,7 +120,7 @@ impl Executor {
             ClientRequest::ComponentOp(op) => self.component_op(op),
             ClientRequest::Disconnect { cause } => {
                 if let Some(cause) = cause {
-                    log::info!("disconnecting cause: {cause}");
+                    tracing::info!("disconnecting cause: {cause}");
                 }
                 Err(Either::Left(RequestError::Disconnect))
             }
@@ -160,7 +162,7 @@ impl Executor {
                     .map_err(Into::into)
                     .map_err(Either::Right)?;
 
-                log::debug!("executing with params: {:?}", params);
+                tracing::debug!("executing with params: {:?}", params);
                 let is_valid = self
                     .runtime
                     .validate_state(&key, &params, &state, related_contracts)
@@ -259,7 +261,7 @@ impl Executor {
                     updates.ok_or_else(|| Either::Right("missing update channel".into()))?;
                 self.register_contract_notifier(key.clone(), id, updates, [].as_ref().into())
                     .unwrap();
-                log::info!("getting contract: {}", key.encoded_contract_id());
+                tracing::info!("getting contract: {}", key.encoded_contract_id());
                 // by default a subscribe op has an implicit get
                 self.perform_get(true, key).await.map_err(Either::Left)
                 // todo: in network mode, also send a subscribe to keep up to date
@@ -284,7 +286,7 @@ impl Executor {
                 match self.runtime.register_component(component, cipher, nonce) {
                     Ok(_) => Ok(HostResponse::Ok),
                     Err(err) => {
-                        log::error!("failed registering component `{key}`: {err}");
+                        tracing::error!("failed registering component `{key}`: {err}");
                         Err(Either::Left(CoreComponentError::RegisterError(key).into()))
                     }
                 }
@@ -293,7 +295,7 @@ impl Executor {
                 match self.runtime.unregister_component(&key) {
                     Ok(_) => Ok(HostResponse::Ok),
                     Err(err) => {
-                        log::error!("failed unregistering component `{key}`: {err}");
+                        tracing::error!("failed unregistering component `{key}`: {err}");
                         Ok(HostResponse::Ok)
                     }
                 }
@@ -308,13 +310,13 @@ impl Executor {
                 ) {
                     Ok(values) => Ok(HostResponse::ComponentResponse { key, values }),
                     Err(err) if err.is_component_exec_error() => {
-                        log::error!("failed processing messages for component `{key}`: {err}");
+                        tracing::error!("failed processing messages for component `{key}`: {err}");
                         Err(Either::Left(
                             CoreComponentError::ExecutionError(format!("{err}")).into(),
                         ))
                     }
                     Err(err) => {
-                        log::error!("failed executing component `{key}`: {err}");
+                        tracing::error!("failed executing component `{key}`: {err}");
                         Ok(HostResponse::Ok)
                     }
                 }
@@ -367,7 +369,7 @@ impl Executor {
         let mut got_contract = None;
         if contract {
             let parameters = self.contract_state.get_params(&key).await.map_err(|e| {
-                log::error!("{e}");
+                tracing::error!("{e}");
                 RequestError::from(CoreContractError::Get {
                     key: key.clone(),
                     cause: "missing contract".to_owned(),
@@ -416,7 +418,7 @@ mod test {
         const MAX_MEM_CACHE: u32 = 10_000_000;
         let tmp_path = std::env::temp_dir().join("locutus-test");
         let contract_store = ContractStore::new(tmp_path.join("executor-test"), MAX_SIZE)?;
-        let state_store = StateStore::new(SqlitePool::new().await?, MAX_MEM_CACHE).unwrap();
+        let state_store = StateStore::new(Storage::new().await?, MAX_MEM_CACHE).unwrap();
         let mut counter = 0;
         Executor::new(contract_store, state_store, || {
             counter += 1;

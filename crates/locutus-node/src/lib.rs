@@ -4,7 +4,7 @@ pub(crate) mod web_handling;
 
 pub use http_gateway::HttpGateway;
 use locutus_core::{locutus_runtime::ContractKey, ClientId, HostResult};
-use locutus_stdlib::api::{ClientError, ClientRequest, HostResponse};
+use locutus_stdlib::client_api::{ClientError, ClientRequest, HostResponse};
 
 type DynError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -37,7 +37,7 @@ pub mod local_node {
     use locutus_core::{
         either, ClientEventsProxy, Executor, OpenRequest, RequestError, WebSocketProxy,
     };
-    use locutus_stdlib::api::{ClientError, ErrorKind};
+    use locutus_stdlib::client_api::{ClientError, ErrorKind};
 
     use crate::{DynError, HttpGateway};
 
@@ -67,7 +67,7 @@ pub mod local_node {
                 }
                 Err(either::Left(RequestError::Disconnect)) => {}
                 Err(either::Left(err)) => {
-                    log::error!("{err}");
+                    tracing::error!("{err}");
                     http_handle
                         .send(
                             id,
@@ -76,7 +76,7 @@ pub mod local_node {
                         .await?;
                 }
                 Err(either::Right(err)) => {
-                    log::error!("{err}");
+                    tracing::error!("{err}");
                     http_handle
                         .send(
                             id,

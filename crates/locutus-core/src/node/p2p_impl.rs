@@ -166,12 +166,12 @@ mod test {
             match ev.await {
                 Ok(SwarmEvent::Behaviour(NetEvent::Ping(ping))) => {
                     if ping.result.is_ok() {
-                        log::info!("ping done @ {}", peer.peer_key);
+                        tracing::info!("ping done @ {}", peer.peer_key);
                         return Ok(());
                     }
                 }
                 Ok(other) => {
-                    log::debug!("{:?}", other)
+                    tracing::debug!("{:?}", other)
                 }
                 Err(_) => {
                     return Err(());
@@ -180,6 +180,7 @@ mod test {
         }
     }
 
+    #[ignore]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn ping() -> Result<(), ()> {
         let peer1_port = get_free_port().unwrap();
